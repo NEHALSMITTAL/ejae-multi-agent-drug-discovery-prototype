@@ -1,0 +1,4 @@
+{"id":"mol001","name":"Gefitinib","smiles":"CN(C)C1=NC(=C2C=CC(=C1)OC)N=CC2=O"}
+{"id":"mol002","name":"Erlotinib","smiles":"CC1=CC(=C(C=C1)NC(=O)C2=CC=CC=C2)OCCN"}
+{"id":"mol003","name":"Bevacizumab","smiles":""}
+{"id":"mol004","name":"Aspirin","smiles":"CC(=O)OC1=CC=CC=C1C(=O)O"}

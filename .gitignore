@@ -1,0 +1,34 @@
+# Virtual environments
+venv/
+.venv/
+
+# Python cache
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+
+# Chroma DB (auto-generated)
+chroma_db/
+data/chroma_db/
+
+# Streamlit local configs (safe to ignore)
+.streamlit/
+
+# Huggingface / model cache
+.huggingface/
+.cache/
+
+# Frontend libs (auto-downloaded)
+lib/
+
+# Local scratch data (optional)
+dataone/
+
+# Logs
+logs/
+*.log
+
+# OS junk
+.DS_Store
+Thumbs.db
