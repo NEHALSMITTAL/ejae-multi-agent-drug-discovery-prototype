@@ -1,52 +1,57 @@
+# ey_project/backend/active_learning.py
 import json
 from pathlib import Path
+from typing import List, Dict, Any
 
-# ------------------------------
-# Directory + File Setup
-# ------------------------------
+# Always anchor to PROJECT ROOT (where streamlit_app.py exists)
+PROJECT_ROOT = Path(__file__).resolve().parents[2]   # go up to project root
+DATA_DIR = PROJECT_ROOT / "ey_project" / "data"
 
-DATA_DIR = Path("data")
-DATA_DIR.mkdir(exist_ok=True)  # Ensure the folder exists
+DATA_DIR.mkdir(parents=True, exist_ok=True)
 
 FEEDBACK_FILE = DATA_DIR / "feedback.jsonl"
 
 
-# ------------------------------
-# Save Feedback
-# ------------------------------
-
-def save_feedback(hypothesis: str, accepted: bool):
+def save_feedback(hypothesis: str, accepted: bool) -> bool:
     """
-    Saves feedback about a hypothesis to data/feedback.jsonl
+    Save feedback into ey_project/data/feedback.jsonl
     """
-    entry = {
-        "hypothesis": hypothesis,
-        "accepted": accepted
-    }
+    try:
+        entry = {"hypothesis": hypothesis, "accepted": bool(accepted)}
 
-    with open(FEEDBACK_FILE, "a", encoding="utf-8") as f:
-        f.write(json.dumps(entry) + "\n")
+        with FEEDBACK_FILE.open("a", encoding="utf-8") as f:
+            f.write(json.dumps(entry, ensure_ascii=False) + "\n")
+
+        print(f"[active_learning] WROTE: {entry}")
+        print(f"[active_learning] PATH: {FEEDBACK_FILE}")
+
+        return True
+
+    except Exception as e:
+        print(f"[active_learning] ERROR: {e}")
+        return False
 
 
-# ------------------------------
-# Load Feedback
-# ------------------------------
-
-def load_feedback():
+def load_feedback() -> List[Dict[str, Any]]:
     """
-    Loads all feedback (if file exists).
-    Returns a list of dicts.
+    Load feedback file safely.
     """
     if not FEEDBACK_FILE.exists():
         return []
 
-    feedback_entries = []
+    entries = []
+    try:
+        with FEEDBACK_FILE.open("r", encoding="utf-8") as f:
+            for line in f:
+                line = line.strip()
+                if not line:
+                    continue
+                try:
+                    entries.append(json.loads(line))
+                except json.JSONDecodeError:
+                    continue
 
-    with open(FEEDBACK_FILE, "r", encoding="utf-8") as f:
-        for line in f:
-            try:
-                feedback_entries.append(json.loads(line.strip()))
-            except json.JSONDecodeError:
-                continue
+    except Exception as e:
+        print(f"[active_learning] ERROR reading: {e}")
 
-    return feedback_entries
+    return entries
