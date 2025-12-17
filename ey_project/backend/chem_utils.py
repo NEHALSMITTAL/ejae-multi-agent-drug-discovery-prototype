@@ -1,50 +1,77 @@
 from rdkit import Chem
 from rdkit.Chem import AllChem, DataStructs
 
-# Small internal molecule database for similarity checking
-MOLECULE_DB = {
-    "Gefitinib": "COC1=CC2=C(C=C1)N(C=N2)CC3=CC(=C(C=C3)F)O",
-    "Erlotinib": "COC1=CC=C2N=CN(C2=C1)C3=CC=C(C=C3)OCC#C",
-    "Aspirin": "CC(=O)OC1=CC=CC=C1C(=O)O",
-    "Ibuprofen": "CC(C)CC1=CC=C(C=C1)C(C)C",
-    "Imatinib": "CC1=NC(=CN=C1N)NCC2=CC=C(C=C2)NC3=NC=CC(=N3)N",
-    "Bevacizumab": ""  # Antibody — no SMILES (will be skipped)
-}
+# -----------------------------------------------------------
+# SAFE MOLECULE LOADING  (prevents RDKit crashes)
+# -----------------------------------------------------------
+def safe_mol_from_smiles(smi: str):
+    """
+    Safely converts SMILES → RDKit Mol with sanitization disabled first.
+    Prevents:
+        - getNumImplicitHs() errors
+        - kekulization failures
+        - invalid valence crashes
+    Returns None if invalid.
+    """
+    if not smi or not isinstance(smi, str):
+        return None
+
+    try:
+        mol = Chem.MolFromSmiles(smi, sanitize=False)
+        if mol is None:
+            return None
+
+        # Now sanitize safely
+        Chem.SanitizeMol(mol, catchErrors=True)
+        return mol
+
+    except Exception:
+        return None
 
 
+# -----------------------------------------------------------
+# SAFE SIMILARITY COMPUTATION
+# -----------------------------------------------------------
 def compute_similarity(smiles1: str, smiles2: str):
     """
     Computes Tanimoto similarity between two SMILES strings.
-    Returns None if either molecule cannot be parsed.
+    Returns None if either is invalid.
+    No RDKit exceptions escape this function.
     """
-    if not smiles1 or not smiles2:
+    mol1 = safe_mol_from_smiles(smiles1)
+    mol2 = safe_mol_from_smiles(smiles2)
+
+    if mol1 is None or mol2 is None:
         return None
 
-    mol1 = Chem.MolFromSmiles(smiles1)
-    mol2 = Chem.MolFromSmiles(smiles2)
-
-    if not mol1 or not mol2:
+    try:
+        fp1 = AllChem.GetMorganFingerprintAsBitVect(mol1, 2, nBits=2048)
+        fp2 = AllChem.GetMorganFingerprintAsBitVect(mol2, 2, nBits=2048)
+        return DataStructs.TanimotoSimilarity(fp1, fp2)
+    except Exception:
         return None
 
-    fp1 = AllChem.GetMorganFingerprintAsBitVect(mol1, 2)
-    fp2 = AllChem.GetMorganFingerprintAsBitVect(mol2, 2)
 
-    return DataStructs.TanimotoSimilarity(fp1, fp2)
-
+# -----------------------------------------------------------
+# TOP‑K MOST SIMILAR MOLECULES
+# -----------------------------------------------------------
+MOLECULE_DB = {
+    "Aspirin": "CC(=O)OC1=CC=CC=C1C(=O)O",
+    "Ibuprofen": "CC(C)CC1=CC=C(C=C1)C(C)C",
+    "Caffeine": "CN1C=NC2=C1C(=O)N(C(=O)N2)C",
+    "Gefitinib": "COCCOc1ccc2nc(N3CCC(N)CC3)nc(N)c2c1",
+    "Erlotinib": "CN(C)CCOc1c(OC)nc(Nc2cccc(Cl)c2)n1"
+}
 
 def find_similar_molecules(query_smiles: str, top_k: int = 3):
     """
-    Returns top-K most similar molecules from MOLECULE_DB.
+    Returns sorted list of (name, smiles, similarity_score).
     """
-
     results = []
-    for name, smiles in MOLECULE_DB.items():
-        if not smiles:
-            continue  # Skip biologics such as Bevacizumab (no SMILES)
 
-        sim = compute_similarity(query_smiles, smiles)
-        if sim:
-            results.append((name, smiles, sim))
+    for name, smi in MOLECULE_DB.items():
+        sim = compute_similarity(query_smiles, smi)
+        if sim is not None:
+            results.append((name, smi, sim))
 
-    results.sort(key=lambda x: x[2], reverse=True)
-    return results[:top_k]
+    return sorted(results, key=lambda x: x[2], reverse=True)[:top_k]

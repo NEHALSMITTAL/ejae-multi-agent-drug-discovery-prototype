@@ -1,67 +1,82 @@
 import json
 from pathlib import Path
-
 from sentence_transformers import SentenceTransformer
 import chromadb
 from chromadb.config import Settings
 from chromadb.utils import embedding_functions
 
-
+# ---------------------------------------------------------------
+# Embedder Class (Optimized A2 Version)
+# ---------------------------------------------------------------
 class Embedder:
     def __init__(self):
-        # SentenceTransformer model (you may or may not use this directly)
+        """
+        Loads model + initializes persistent ChromaDB client once.
+        """
+        # Load lightweight transformer model (fast)
         self.model = SentenceTransformer("all-MiniLM-L6-v2")
 
-        # Make sure the DB directory exists (at project root / chroma_db)
+        # Persistent local DB → no re-indexing needed
         project_root = Path(__file__).resolve().parents[1]
         db_path = project_root / "chroma_db"
         db_path.mkdir(exist_ok=True)
 
-        # ✅ New-style Chroma client: PersistentClient instead of deprecated Client(...)
-        # Settings is now optional; default is fine for local duckdb+parquet
         self.client = chromadb.PersistentClient(
             path=str(db_path),
-            settings=Settings(),  # keep it simple; can tweak later if needed
+            settings=Settings()
         )
 
         self.collection = None
 
+    # -----------------------------------------------------------
+    # Create or load collection
+    # -----------------------------------------------------------
     def create_collection(self, name: str = "ej_docs"):
-        # Use the same embedding function you had before
+        """
+        Creates or loads the Chroma collection.
+        Embedding is handled automatically using a SentenceTransformer.
+        """
         ef = embedding_functions.SentenceTransformerEmbeddingFunction(
             model_name="all-MiniLM-L6-v2"
         )
 
         self.collection = self.client.get_or_create_collection(
             name=name,
-            embedding_function=ef,
+            embedding_function=ef
         )
 
+    # -----------------------------------------------------------
+    # Index documents (ONLY run once using index_docs.py)
+    # -----------------------------------------------------------
     def index_docs(self, docs):
+        """
+        Adds documents into the vector database.
+        docs must contain: id, text, title(optional)
+        """
         if self.collection is None:
             self.create_collection()
 
-        # Expect each doc to have at least 'id' and 'text'
         ids = [str(d["id"]) for d in docs]
         texts = [d["text"] for d in docs]
-        metadatas = [{"title": d.get("title")} for d in docs]
+        metas = [{"title": d.get("title", None)} for d in docs]
 
         self.collection.add(
             ids=ids,
             documents=texts,
-            metadatas=metadatas,
+            metadatas=metas
         )
 
-        # For PersistentClient, data is stored automatically,
-        # but calling persist() is still OK for extra safety in older patterns.
-        # NOTE: chromadb.PersistentClient does not expose .persist(),
-        # so we don't call self.client.persist() here.
-
-    def query(self, text, k: int = 5):
+    # -----------------------------------------------------------
+    # QUERY DOCUMENTS
+    # -----------------------------------------------------------
+    def query(self, text: str, k: int = 5):
+        """
+        Returns top-k matching documents.
+        """
         if self.collection is None:
             self.create_collection()
 
         return self.collection.query(
             query_texts=[text],
-            n_results=k,
+            n_results=k
         )

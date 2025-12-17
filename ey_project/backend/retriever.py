@@ -1,17 +1,36 @@
 from backend.embedder import Embedder
 
-# Initialize embedder once at module load (fast + efficient)
+# ---------------------------------------------------------------
+# Initialize embedder ONCE at module import
+# This prevents reloading & rebuilding the DB on every Streamlit run
+# ---------------------------------------------------------------
 embedder = Embedder()
 embedder.create_collection()
 
-def retrieve(query_text, k=5):
+
+# ---------------------------------------------------------------
+# RETRIEVE DOCUMENTS
+# ---------------------------------------------------------------
+def retrieve(query_text: str, k: int = 5):
     """
-    Retrieve top-k similar documents from the Chroma vector database.
-    Returns a list of dicts: {id, text, meta}.
+    Retrieve top-k semantically similar documents from ChromaDB.
+
+    Returns:
+        [
+            {
+                "id": "...",
+                "text": "...",
+                "meta": { ... }
+            }
+        ]
     """
+
+    if not query_text:
+        return []
+
     results = embedder.query(query_text, k)
 
-    # Defensive checks in case Chroma returns empty lists
+    # Defensive fallback — Chroma sometimes returns empty lists
     ids = results.get("ids", [[]])[0]
     docs = results.get("documents", [[]])[0]
     metas = results.get("metadatas", [[]])[0]
@@ -21,7 +40,7 @@ def retrieve(query_text, k=5):
         retrieved.append({
             "id": ids[i],
             "text": docs[i],
-            "meta": metas[i]
+            "meta": metas[i] if metas else {}
         })
 
     return retrieved
